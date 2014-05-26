@@ -10,12 +10,12 @@ class MudPlugin extends Omeka_Plugin_AbstractPlugin
             );
 
     protected $_filters = array(
-            'filterDiscipline' => array('Display', 'Item', 'Mud Elements', 'DISCIPL'),
-            'filterIncomeCd'   => array('Display', 'Item', 'Mud Elements', 'INCOMECD'),
-            'filterLocale4'    => array('Display', 'Item', 'Mud Elements', 'LOCALE4'),
-            'filterAamreg'     => array('Display', 'Item', 'Mud Elements', 'AAMREG'),
+            'filterDiscipline' => array('Display', 'Item', 'MUD Elements', 'DISCIPL'),
+            'filterIncomeCd'   => array('Display', 'Item', 'MUD Elements', 'INCOMECD'),
+            'filterLocale4'    => array('Display', 'Item', 'MUD Elements', 'LOCALE4'),
+            'filterAamreg'     => array('Display', 'Item', 'MUD Elements', 'AAMREG'),
     );
-
+    
     public function hookInstall($args)
     {
         $this->installMudElements();
@@ -187,8 +187,8 @@ class MudPlugin extends Omeka_Plugin_AbstractPlugin
     protected function addDcIds($item)
     {
         $dcIdEl = $this->getDcEl('Identifier');
-        $item->addTextForElement($dcIdEl, metadata($item, array('MUD Elements', 'MID')));
-        $item->addTextForElement($dcIdEl, metadata($item, array('MUD Elements', 'EID')));
+        $item->addTextForElement($dcIdEl, 'mid_' . metadata($item, array('MUD Elements', 'MID')));
+        $item->addTextForElement($dcIdEl, 'ein_' . metadata($item, array('MUD Elements', 'EIN')));
     }
 
     protected function addDcType($item)
