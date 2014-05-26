@@ -3,17 +3,19 @@
 class MudPlugin extends Omeka_Plugin_AbstractPlugin
 {
     protected $dcEls = array();
-    
+
     protected $_hooks = array(
             'install',
             'after_save_item',
-            'before_save_item'
             );
-    
+
     protected $_filters = array(
-            'filterDiscipline' => array('Display', 'Item', 'Mud Elements', 'DISCIPL') 
+            'filterDiscipline' => array('Display', 'Item', 'Mud Elements', 'DISCIPL'),
+            'filterIncomeCd'   => array('Display', 'Item', 'Mud Elements', 'INCOMECD'),
+            'filterLocale4'    => array('Display', 'Item', 'Mud Elements', 'LOCALE4'),
+            'filterAamreg'     => array('Display', 'Item', 'Mud Elements', 'AAMREG'),
     );
-    
+
     public function hookInstall($args)
     {
         $this->installMudElements();
@@ -52,12 +54,93 @@ class MudPlugin extends Omeka_Plugin_AbstractPlugin
         }
     }
 
-    public function hookBeforeSaveItem($args)
+    public function filterIncomeCd($value, $args)
     {
-        $item = $args['record'];
+        switch($value) {
+            case '0':
+                return '$0';
+                break;
+            case '1':
+                return '$1 to $9,000';
+                break;
+            case '2':
+                return '$10,000 to $24,999';
+                break;
+            case '3':
+                return '$25,000 to $99,999';
+                break;
+            case '4':
+                return '$100,000 to $499,999';
+                break;
+            case '5':
+                return '$500,000 to $999,999';
+                break;
+            case '6':
+                return '$1,000,000 to $4,999,999';
+                break;
+            case '7':
+                return '$5,000,000 to $9,999,999';
+                break;
+            case '8':
+                return '$10,000,000 to $49,999,999';
+                break;
+            case '9';
+                return '$50,000,000 to greater';
+                break;
+            default:
+                return 'Unknown';
+                break;
+        }
+    }
 
+    public function filterLocale4($value, $args)
+    {
+        switch($value) {
+            case '1':
+                return 'City';
+                break;
+            case '2':
+                return 'Suburb';
+                break;
+            case '3':
+                return 'Town';
+                break;
+            case '4':
+                return 'Rural';
+                break;
+            default:
+                return 'Unknown';
+                break;
+        }
     }
     
+    public function filterAamreg($value, $args) 
+    {
+        switch($value) {
+            case '1':
+                return 'New England';
+                break;
+            case '2':
+                return 'Mid-Atlantic';
+                break;
+            case '3':
+                return 'Southeastern';
+                break;
+            case '4':
+                return 'Midwest';
+                break;
+            case '5':
+                return 'Mount Plains';
+                break;
+            case '6':
+                return 'Western';
+                break;
+            default:
+                return 'Unknown';
+                break;
+        }
+    }
+
     public function hookAfterSaveItem($args)
     {
         $item = $args['record'];
@@ -77,7 +160,6 @@ class MudPlugin extends Omeka_Plugin_AbstractPlugin
         }
         $url = metadata($item, array('MUD Elements', 'WEBURL'));
         $dbpediaData = $this->dbpediaData($url);
-        //$dbpediaData = array('pic' => 'http://localhost/badge-beer-default.png', 'desc' => 'Fake Description');
         $picUrl = $dbpediaData['pic'];
         if($picUrl) {
             insert_files_for_item($item, 'Url', array($picUrl));
@@ -279,13 +361,12 @@ class MudPlugin extends Omeka_Plugin_AbstractPlugin
         //make four attempts at looking up additional data
         //first, the url without trailing slash
         $data = $this->queryDbpedia($url);
-        //$data = false;
         
         //second, the url with trailing slash
         if(! $data) {
             $url = $url . '/';
         }
-        usleep(200);
+        usleep(100);
         $data = $this->queryDbpedia($url);
         //third, see if the url is redirected, and lookup the redirected url, sans slash
         
