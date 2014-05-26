@@ -4,6 +4,8 @@ class MudPlugin extends Omeka_Plugin_AbstractPlugin
 {
     protected $dcEls = array();
 
+    protected $mudEls = array();
+
     protected $_hooks = array(
             'install',
             'after_save_item',
@@ -14,13 +16,19 @@ class MudPlugin extends Omeka_Plugin_AbstractPlugin
             'filterIncomeCd'   => array('Display', 'Item', 'MUD Elements', 'INCOMECD'),
             'filterLocale4'    => array('Display', 'Item', 'MUD Elements', 'LOCALE4'),
             'filterAamreg'     => array('Display', 'Item', 'MUD Elements', 'AAMREG'),
+            'filterPhone'      => array('Display', 'Item', 'MUD Elements', 'PHONE'),
     );
-    
+
     public function hookInstall($args)
     {
         $this->installMudElements();
     }
 
+    public function filterPhone($value, $args)
+    {
+        return "(".substr($value, 0, 3).") ".substr($value, 3, 3)."-".substr($value,6);
+    }
+    
     public function filterDiscipline($value, $args)
     {
         switch($value) {
@@ -151,7 +159,7 @@ class MudPlugin extends Omeka_Plugin_AbstractPlugin
             $location->item_id = $item->id;
             $location->latitude = metadata($item, array('MUD Elements', 'LATITUDE'));
             $location->longitude = metadata($item, array('MUD Elements', 'LONGITUDE'));
-            $location->zoom_level = 3;
+            $location->zoom_level = '12';
             $location->map_type = 'Google Maps v3.x';
             $location->address = '';
             if(! is_null($location->latitude)) {
@@ -162,39 +170,61 @@ class MudPlugin extends Omeka_Plugin_AbstractPlugin
         $dbpediaData = $this->dbpediaData($url);
         $picUrl = $dbpediaData['pic'];
         if($picUrl) {
-            insert_files_for_item($item, 'Url', array($picUrl));
+            try {
+                insert_files_for_item($item, 'Url', array($picUrl));
+            } catch(Exception $e) {
+                _log($e->getMessage());
+            }
         }
-
+        
         if(! empty($dbpediaData['desc'])) {
             $dcDescEl = $this->getDcEl('Description');
             $item->addTextForElement($dcDescEl, $dbpediaData['desc']);
+        }
+        if(! empty($dbpediaData['dbpediaUri'])) {
+            $mudDbpediaEl = $this->getMudEl('DBpedia Uri');
+            $item->addTextForElement($mudDbpediaEl, $dbpediaData['dbpediaUri']);
+        }
+        if(! empty($dbpediaData['wikipediaUrl'])) {
+            $mudWikipediaEl = $this->getMudEl('Wikipedia Url');
+            $item->addTextForElement($mudWikipediaEl, $dbpediaData['wikipediaUrl']);
         }
         
         $this->addDcTitles($item);
         $this->addDcIds($item);
         $this->addDcType($item);
-    
         $item->saveElementTexts();
     }
 
     protected function addDcTitles($item)
     {
         $dcTitleEl = $this->getDcEl('Title');
-        $item->addTextForElement($dcTitleEl, metadata($item, array('MUD Elements', 'NAME')));
-        $item->addTextForElement($dcTitleEl, metadata($item, array('MUD Elements', 'ALTNAME')));
+        $name = metadata($item, array('MUD Elements', 'NAME'));
+        $altName = metadata($item, array('MUD Elements', 'ALTNAME'));
+        if(!empty($name)) {
+            $item->addTextForElement($dcTitleEl, $name);
+        }
+        if(!empty($altName)) {
+            $item->addTextForElement($dcTitleEl, $altName);
+        }
     }
 
     protected function addDcIds($item)
     {
         $dcIdEl = $this->getDcEl('Identifier');
-        $item->addTextForElement($dcIdEl, 'mid_' . metadata($item, array('MUD Elements', 'MID')));
-        $item->addTextForElement($dcIdEl, 'ein_' . metadata($item, array('MUD Elements', 'EIN')));
+        $mid = metadata($item, array('MUD Elements', 'MID'));
+        $ein = metadata($item, array('MUD Elements', 'EIN'));
+        $item->addTextForElement($dcIdEl, 'mid_' . $mid);
+        $item->addTextForElement($dcIdEl, 'ein_' . $ein);
     }
 
     protected function addDcType($item)
     {
         $dcTypeEl = $this->getDcEl('Type');
-        $item->addTextForElement($dcTypeEl, metadata($item, array('MUD Elements', 'DISCIPL')));
+        $disc = metadata($item, array('MUD Elements', 'DISCIPL'));
+        if(!empty($disc)) {
+            $item->addTextForElement($dcTypeEl, $disc);
+        }
     }
 
     protected function installMudElements()
@@ -348,6 +378,10 @@ class MudPlugin extends Omeka_Plugin_AbstractPlugin
                 array(
                     'name' => 'Wikipedia Url',
                     'description' => ''
+                    ),
+                array(
+                    'name' => 'DBpedia Uri',
+                    'description' => ''
                     )
         );
         insert_element_set($elementSetMetadata, $elements);
@@ -419,15 +453,29 @@ class MudPlugin extends Omeka_Plugin_AbstractPlugin
         } else {
             $pic = $body['results']['bindings'][0]['pic']['value'];
             $desc = $body['results']['bindings'][0]['desc']['value'];
-            return array('pic' => $pic, 'desc' => $desc);
+            $dbpediaUri = $body['results']['bindings'][0]['s']['value'];
+            $wikipediaUrl = $body['results']['bindings'][0]['wikipediaUrl']['value'];
+            return array('pic' => $pic, 
+                         'desc' => $desc, 
+                         'dbpediaUri' => $dbpediaUri, 
+                         'wikipediaUrl' => $wikipediaUrl
+                        );
         }
     }
-    
+
     protected function getDcEl($elementName)
     {
         if(! isset($this->dcEls[$elementName])) {
             $this->dcEls[$elementName] = get_db()->getTable('Element')->findByElementSetNameAndElementName('Dublin Core', $elementName);
         }
         return $this->dcEls[$elementName];
+    }
+
+    protected function getMudEl($elementName)
+    {
+        if(! isset($this->mudEls[$elementName])) {
+            $this->mudEls[$elementName] = get_db()->getTable('Element')->findByElementSetNameAndElementName('MUD Elements', $elementName);
+        }
+        return $this->mudEls[$elementName];
     }
 }
