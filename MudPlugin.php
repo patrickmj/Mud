@@ -6,13 +6,16 @@ class MudPlugin extends Omeka_Plugin_AbstractPlugin
 
     protected $mudEls = array();
 
+    private $dbpediaData = false;
     protected $_hooks = array(
             'install',
-            'after_save_item',
+            'before_save_item',
+            'after_save_item'
             );
 
     protected $_filters = array(
             'filterDiscipline' => array('Display', 'Item', 'MUD Elements', 'DISCIPL'),
+            'filterDcType' => array('Display', 'Item', 'Dublin Core', 'Type'),
             'filterIncomeCd'   => array('Display', 'Item', 'MUD Elements', 'INCOMECD'),
             'filterLocale4'    => array('Display', 'Item', 'MUD Elements', 'LOCALE4'),
             'filterAamreg'     => array('Display', 'Item', 'MUD Elements', 'AAMREG'),
@@ -27,6 +30,10 @@ class MudPlugin extends Omeka_Plugin_AbstractPlugin
     public function filterPhone($value, $args)
     {
         return "(".substr($value, 0, 3).") ".substr($value, 3, 3)."-".substr($value,6);
+    }
+    
+    public function filterDcType($value, $args) {
+        return $this->filterDiscipline($value, $args);
     }
     
     public function filterDiscipline($value, $args)
@@ -148,7 +155,11 @@ class MudPlugin extends Omeka_Plugin_AbstractPlugin
                 break;
         }
     }
-
+    
+    /**
+     * Add the data that requires an item id
+     * @param array $args
+     */
     public function hookAfterSaveItem($args)
     {
         $item = $args['record'];
@@ -166,34 +177,40 @@ class MudPlugin extends Omeka_Plugin_AbstractPlugin
                 $location->save();
             }
         }
-        $url = metadata($item, array('MUD Elements', 'WEBURL'));
-        $dbpediaData = $this->dbpediaData($url);
-        $picUrl = $dbpediaData['pic'];
-        if($picUrl) {
-            try {
-                insert_files_for_item($item, 'Url', array($picUrl));
-            } catch(Exception $e) {
-                _log($e->getMessage());
+        if($this->dbpediaData) {
+            $picUrl = $this->dbpediaData['pic'];
+            if($picUrl) {
+                try {
+                    insert_files_for_item($item, 'Url', array($picUrl));
+                } catch(Exception $e) {
+                    _log($e->getMessage());
+                }
             }
         }
-        
-        if(! empty($dbpediaData['desc'])) {
-            $dcDescEl = $this->getDcEl('Description');
-            $item->addTextForElement($dcDescEl, $dbpediaData['desc']);
+    }
+
+    public function hookBeforeSaveItem($args)
+    {
+        $url = metadata($item, array('MUD Elements', 'WEBURL'));
+        $this->fetchDbpediaData($url);
+
+        if($this->dbpediaData) {
+            if(! empty($this->dbpediaData['desc'])) {
+                $dcDescEl = $this->getDcEl('Description');
+                $item->addTextForElement($dcDescEl, $dbpediaData['desc']);
+            }
+            if(! empty($this->dbpediaData['dbpediaUri'])) {
+                $mudDbpediaEl = $this->getMudEl('DBpedia Uri');
+                $item->addTextForElement($mudDbpediaEl, $dbpediaData['dbpediaUri']);
+            }
+            if(! empty($this->dbpediaData['wikipediaUrl'])) {
+                $mudWikipediaEl = $this->getMudEl('Wikipedia Url');
+                $item->addTextForElement($mudWikipediaEl, $dbpediaData['wikipediaUrl']);
+            }
         }
-        if(! empty($dbpediaData['dbpediaUri'])) {
-            $mudDbpediaEl = $this->getMudEl('DBpedia Uri');
-            $item->addTextForElement($mudDbpediaEl, $dbpediaData['dbpediaUri']);
-        }
-        if(! empty($dbpediaData['wikipediaUrl'])) {
-            $mudWikipediaEl = $this->getMudEl('Wikipedia Url');
-            $item->addTextForElement($mudWikipediaEl, $dbpediaData['wikipediaUrl']);
-        }
-        
         $this->addDcTitles($item);
         $this->addDcIds($item);
         $this->addDcType($item);
-        $item->saveElementTexts();
     }
 
     protected function addDcTitles($item)
@@ -387,38 +404,26 @@ class MudPlugin extends Omeka_Plugin_AbstractPlugin
         insert_element_set($elementSetMetadata, $elements);
     }
     
-    protected function dbpediaData($url)
+    protected function fetchDbpediaData($url)
     {
         $url = rtrim($url, '/');
         //$url = "http://americanart.si.edu";
         //$url = "http://www.armyavnmuseum.org";
-        //make four attempts at looking up additional data
+        //make some attempts at looking up additional data
         //first, the url without trailing slash
         $data = $this->queryDbpedia($url);
         
         //second, the url with trailing slash
         if(! $data) {
             $url = $url . '/';
+            sleep(1);
+            $data = $this->queryDbpedia($url);
         }
-        usleep(100);
-        $data = $this->queryDbpedia($url);
-        //third, see if the url is redirected, and lookup the redirected url, sans slash
         
-        /*
-        if(! $data) {
-            $client = new Zend_Http_Client();
-            $client->setUri($url);
-            $response = $client->request();
-            echo $client->getUri();
-            
-        }
-        //try the redirected url, with the slash
+        //insert new variations, like digging up a redirected / updataed url, here
         
-        //$this->queryDbpedia($url);
         
-         */
-        
-        return $data;
+        $this->dbpediaData = $data;
     }
     
     protected function queryDbpedia($url)
