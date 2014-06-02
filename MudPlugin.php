@@ -9,13 +9,11 @@ class MudPlugin extends Omeka_Plugin_AbstractPlugin
     private $dbpediaData = false;
     protected $_hooks = array(
             'install',
-            'before_save_item',
             'after_save_item'
             );
 
     protected $_filters = array(
             'filterDiscipline' => array('Display', 'Item', 'MUD Elements', 'DISCIPL'),
-            'filterDcType' => array('Display', 'Item', 'Dublin Core', 'Type'),
             'filterIncomeCd'   => array('Display', 'Item', 'MUD Elements', 'INCOMECD'),
             'filterLocale4'    => array('Display', 'Item', 'MUD Elements', 'LOCALE4'),
             'filterAamreg'     => array('Display', 'Item', 'MUD Elements', 'AAMREG'),
@@ -24,6 +22,19 @@ class MudPlugin extends Omeka_Plugin_AbstractPlugin
 
     public function hookInstall($args)
     {
+        $db = $this->_db;
+        $sql = "
+            CREATE TABLE IF NOT EXISTS `$db->MudIdsMap` (
+              `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+              `mid` bigint(20) unsigned NOT NULL,
+              `item_id` int(10) unsigned NOT NULL,
+              `dbpedia_uri` text COLLATE utf8_unicode_ci,
+              `messages` text COLLATE utf8_unicode_ci,
+              PRIMARY KEY (`id`),
+              UNIQUE KEY `mid` (`mid`,`item_id`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci AUTO_INCREMENT=1 ;
+            ";
+        $db->queryBlock($sql);
         $this->installMudElements();
     }
 
@@ -31,11 +42,7 @@ class MudPlugin extends Omeka_Plugin_AbstractPlugin
     {
         return "(".substr($value, 0, 3).") ".substr($value, 3, 3)."-".substr($value,6);
     }
-    
-    public function filterDcType($value, $args) {
-        return $this->filterDiscipline($value, $args);
-    }
-    
+
     public function filterDiscipline($value, $args)
     {
         switch($value) {
@@ -165,7 +172,7 @@ class MudPlugin extends Omeka_Plugin_AbstractPlugin
         $item = $args['record'];
         $geoTable = get_db()->getTable('Location');
         $location = $geoTable->findLocationByItem($item, true);
-        if(! $location) {
+        if (! $location) {
             $location = new Location();
             $location->item_id = $item->id;
             $location->latitude = metadata($item, array('MUD Elements', 'LATITUDE'));
@@ -173,13 +180,35 @@ class MudPlugin extends Omeka_Plugin_AbstractPlugin
             $location->zoom_level = '12';
             $location->map_type = 'Google Maps v3.x';
             $location->address = '';
-            if(! is_null($location->latitude)) {
+            if (! is_null($location->latitude)) {
                 $location->save();
             }
         }
-        if($this->dbpediaData) {
+        $this->addDcTitles($item);
+        $this->addDcIds($item);
+        $this->addDcType($item);
+
+        $url = metadata($item, array('MUD Elements', 'WEBURL'));
+        //validate the url. if not, leave a message on the MudIdMap
+        if(! empty($url) && Zend_Uri::check($url)) {
+            $this->fetchDbpediaData($url);
+        }
+
+        if ($this->dbpediaData) {
+            if (! empty($this->dbpediaData['desc'])) {
+                $dcDescEl = $this->getDcEl('Description');
+                $item->addTextForElement($dcDescEl, $this->dbpediaData['desc']);
+            }
+            if (! empty($this->dbpediaData['dbpediaUri'])) {
+                $mudDbpediaEl = $this->getMudEl('DBpedia Uri');
+                $item->addTextForElement($mudDbpediaEl, $this->dbpediaData['dbpediaUri']);
+            }
+            if (! empty($this->dbpediaData['wikipediaUrl'])) {
+                $mudWikipediaEl = $this->getMudEl('Wikipedia Url');
+                $item->addTextForElement($mudWikipediaEl, $this->dbpediaData['wikipediaUrl']);
+            }
             $picUrl = $this->dbpediaData['pic'];
-            if($picUrl) {
+            if ($picUrl) {
                 try {
                     insert_files_for_item($item, 'Url', array($picUrl));
                 } catch(Exception $e) {
@@ -187,30 +216,11 @@ class MudPlugin extends Omeka_Plugin_AbstractPlugin
                 }
             }
         }
-    }
-
-    public function hookBeforeSaveItem($args)
-    {
-        $url = metadata($item, array('MUD Elements', 'WEBURL'));
-        $this->fetchDbpediaData($url);
-
-        if($this->dbpediaData) {
-            if(! empty($this->dbpediaData['desc'])) {
-                $dcDescEl = $this->getDcEl('Description');
-                $item->addTextForElement($dcDescEl, $dbpediaData['desc']);
-            }
-            if(! empty($this->dbpediaData['dbpediaUri'])) {
-                $mudDbpediaEl = $this->getMudEl('DBpedia Uri');
-                $item->addTextForElement($mudDbpediaEl, $dbpediaData['dbpediaUri']);
-            }
-            if(! empty($this->dbpediaData['wikipediaUrl'])) {
-                $mudWikipediaEl = $this->getMudEl('Wikipedia Url');
-                $item->addTextForElement($mudWikipediaEl, $dbpediaData['wikipediaUrl']);
-            }
-        }
-        $this->addDcTitles($item);
-        $this->addDcIds($item);
-        $this->addDcType($item);
+        $item->saveElementTexts();
+        $searchTitle = metadata($item, array('Dublin Core', 'Title'));
+        $searchText = metadata($item, array('Dublin Core', 'Description'));
+        Mixin_Search::saveSearchText('Item', $item->id, $searchText, $searchTitle);
+        $this->createMudIdsMap($item);
     }
 
     protected function addDcTitles($item)
@@ -218,10 +228,10 @@ class MudPlugin extends Omeka_Plugin_AbstractPlugin
         $dcTitleEl = $this->getDcEl('Title');
         $name = metadata($item, array('MUD Elements', 'NAME'));
         $altName = metadata($item, array('MUD Elements', 'ALTNAME'));
-        if(!empty($name)) {
+        if (!empty($name)) {
             $item->addTextForElement($dcTitleEl, $name);
         }
-        if(!empty($altName)) {
+        if (!empty($altName)) {
             $item->addTextForElement($dcTitleEl, $altName);
         }
     }
@@ -231,15 +241,19 @@ class MudPlugin extends Omeka_Plugin_AbstractPlugin
         $dcIdEl = $this->getDcEl('Identifier');
         $mid = metadata($item, array('MUD Elements', 'MID'));
         $ein = metadata($item, array('MUD Elements', 'EIN'));
+        if (!empty($ein)) {
+            $item->addTextForElement($dcIdEl, 'ein_' . $ein);    
+        }
         $item->addTextForElement($dcIdEl, 'mid_' . $mid);
-        $item->addTextForElement($dcIdEl, 'ein_' . $ein);
+        
     }
 
     protected function addDcType($item)
     {
-        $dcTypeEl = $this->getDcEl('Type');
+        
         $disc = metadata($item, array('MUD Elements', 'DISCIPL'));
-        if(!empty($disc)) {
+        if (! empty($disc)) {
+            $dcTypeEl = $this->getDcEl('Type');
             $item->addTextForElement($dcTypeEl, $disc);
         }
     }
@@ -377,7 +391,7 @@ class MudPlugin extends Omeka_Plugin_AbstractPlugin
                     'description' => ''
                     ),
                 array(
-                    'name' =>'IRS990',
+                    'name' =>'IRS990_F',
                     'description' => ''
                     ),
                 array(
@@ -482,5 +496,30 @@ class MudPlugin extends Omeka_Plugin_AbstractPlugin
             $this->mudEls[$elementName] = get_db()->getTable('Element')->findByElementSetNameAndElementName('MUD Elements', $elementName);
         }
         return $this->mudEls[$elementName];
+    }
+    
+    protected function createMudIdsMap($item)
+    {
+        $mid = metadata($item, array('MUD Elements', 'MID'));
+        $table = $this->_db->getTable('MudIdsMap');
+        $select = $table->getSelect();
+        $select->where('mid = ?', $mid);
+        
+        $record = $table->fetchObject($select);
+        if(! $record) {
+            $record = new MudIdsMap;
+            $record->item_id = $item->id;
+            $record->mid = $mid;
+        }
+        if ($this->dbpediaData) {
+            $record->dbpedia_uri = $this->dbpediaData['dbpediaUri'];
+        }
+
+        $url = metadata($item, array('MUD Elements', 'WEBURL'));
+        $validUrl = Zend_Uri::check($url);
+        if (! empty($url) && ! $validUrl) {
+            $record->messages = json_encode(array('url' => $url));
+        }
+        $record->save();
     }
 }
