@@ -208,6 +208,7 @@ class MudPlugin extends Omeka_Plugin_AbstractPlugin
                 $item->addTextForElement($mudWikipediaEl, $this->dbpediaData['wikipediaUrl']);
             }
             $picUrl = $this->dbpediaData['pic'];
+            //@TODO: curl to see if 404. if so, replace 'commons' with 'en' in url
             if ($picUrl) {
                 try {
                     insert_files_for_item($item, 'Url', array($picUrl));
