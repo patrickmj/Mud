@@ -208,14 +208,29 @@ class MudPlugin extends Omeka_Plugin_AbstractPlugin
                 $item->addTextForElement($mudWikipediaEl, $this->dbpediaData['wikipediaUrl']);
             }
             $picUrl = $this->dbpediaData['pic'];
-            //@TODO: curl to see if 404. if so, replace 'commons' with 'en' in url
+            //@TODO: maneuvering around pic url variations will have to be abstracted out someplace
             if ($picUrl) {
+                $fileFail = false;
                 try {
                     insert_files_for_item($item, 'Url', array($picUrl));
                 } catch(Exception $e) {
                     _log($e->getMessage());
+                    $fileFail = true;
                 }
             }
+            if ($fileFail) {
+                $picUrl = str_replace('commons', 'en', $picUrl);
+            }
+            if ($picUrl) {
+                $fileFail = false;
+                try {
+                    insert_files_for_item($item, 'Url', array($picUrl));
+                } catch(Exception $e) {
+                    _log($e->getMessage());
+                    $fileFail = true;
+                }
+            }            
+            
         }
         $item->saveElementTexts();
         $searchTitle = metadata($item, array('Dublin Core', 'Title'));
@@ -421,6 +436,7 @@ class MudPlugin extends Omeka_Plugin_AbstractPlugin
     
     protected function fetchDbpediaData($url)
     {
+        $this->dbpediaData = false;
         $url = rtrim($url, '/');
         //$url = "http://americanart.si.edu";
         //$url = "http://www.armyavnmuseum.org";
