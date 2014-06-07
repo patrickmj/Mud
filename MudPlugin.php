@@ -50,7 +50,7 @@ class MudPlugin extends Omeka_Plugin_AbstractPlugin
                 return __("Art Museums");
                 break;
             case 'BOT':
-                return __("Aroboretums, Botanitcal Gardends, And Nature Centers");
+                return __("Aroboretums, Botanitcal Gardens, And Nature Centers");
                 break;
             case 'CMU':
                 return __("Children's Museums");
