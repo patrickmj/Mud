@@ -190,7 +190,8 @@ class MudPlugin extends Omeka_Plugin_AbstractPlugin
 
         $url = metadata($item, array('MUD Elements', 'WEBURL'));
         //validate the url. if not, leave a message on the MudIdMap
-        if(! empty($url) && Zend_Uri::check($url)) {
+        $this->dbpediaData = false;
+        if( (! empty($url)) && Zend_Uri::check($url)) {
             $this->fetchDbpediaData($url);
         }
 
@@ -436,7 +437,6 @@ class MudPlugin extends Omeka_Plugin_AbstractPlugin
     
     protected function fetchDbpediaData($url)
     {
-        $this->dbpediaData = false;
         $url = rtrim($url, '/');
         //$url = "http://americanart.si.edu";
         //$url = "http://www.armyavnmuseum.org";

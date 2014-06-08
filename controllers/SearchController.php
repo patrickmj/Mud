@@ -30,6 +30,10 @@ class Mud_SearchController extends Omeka_Controller_AbstractActionController
         }
         //make a mobile location take precedent
         if ($params['mobile-located'] == 1) {
+            $session = new Zend_Session_Namespace();
+            $session->geolocationLatitude = $paramArray['geolocation_latitude'];
+            $session->geolocationLongitude = $paramArray['geolocation_longitude']; 
+            $session->mobileLocated = $params['mobile-located'];
             $paramArray = array('search' => '', 'advanced' => $advanced);
             $paramArray['geolocation-address'] = 'Where you are'; //geolocation needs this to not be empty
             $paramArray['geolocation-latitude'] = $params['geolocation-latitude'];
@@ -38,7 +42,6 @@ class Mud_SearchController extends Omeka_Controller_AbstractActionController
                 $paramArray['geolocation-radius'] = $params['geolocation-radius'];
             }
         }
-debug(print_r($paramArray, true));
         $searchParams = http_build_query($paramArray);
         $this->_helper->redirector->gotoUrl('items/browse?' . $searchParams );
     }
