@@ -6,7 +6,7 @@ class Mud_SearchController extends Omeka_Controller_AbstractActionController
         $params = $this->getAllParams();
         $advanced = array();
         if (!empty($params['type'])) {
-            $advanced[] = array('element_id' => 51, 'type' => 'is_exactly', 'terms' => $params['type']);
+            $advanced[] = array('element_id' => 51, 'type' => 'is exactly', 'terms' => $params['type']);
         }
         $paramArray = array('search' => '', 'advanced' => $advanced);
         if (!empty($params['zip'])) {

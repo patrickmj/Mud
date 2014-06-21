@@ -7,6 +7,8 @@ class MudPlugin extends Omeka_Plugin_AbstractPlugin
     protected $mudEls = array();
 
     private $dbpediaData = false;
+    
+    
     protected $_hooks = array(
             'install',
             'after_save_item'
@@ -20,6 +22,19 @@ class MudPlugin extends Omeka_Plugin_AbstractPlugin
             'filterPhone'      => array('Display', 'Item', 'MUD Elements', 'PHONE'),
     );
 
+    const PREFIXES = "
+            PREFIX owl: <http://www.w3.org/2002/07/owl#>
+            PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+            PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+            PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+            PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+            PREFIX dc: <http://purl.org/dc/elements/1.1/>
+            PREFIX : <http://dbpedia.org/resource/>
+            PREFIX dbpedia2: <http://dbpedia.org/property/>
+            PREFIX dbpedia: <http://dbpedia.org/>
+            PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+    ";
+    
     public function hookInstall($args)
     {
         $db = $this->_db;
@@ -188,13 +203,16 @@ class MudPlugin extends Omeka_Plugin_AbstractPlugin
         $this->addDcIds($item);
         $this->addDcType($item);
 
-        $url = metadata($item, array('MUD Elements', 'WEBURL'));
+        
         //validate the url. if not, leave a message on the MudIdMap
+        //check on initial import
         $this->dbpediaData = false;
-        if( (! empty($url)) && Zend_Uri::check($url)) {
-            $this->fetchDbpediaData($url);
-        }
+        $this->fetchDbpediaData($item);
 
+
+        //check on saving with new data
+        
+        
         if ($this->dbpediaData) {
             if (! empty($this->dbpediaData['desc'])) {
                 $dcDescEl = $this->getDcEl('Description');
@@ -435,14 +453,14 @@ class MudPlugin extends Omeka_Plugin_AbstractPlugin
         insert_element_set($elementSetMetadata, $elements);
     }
     
-    protected function fetchDbpediaData($url)
+    protected function fetchDbpediaData($item)
     {
+
+        $url = metadata($item, array('MUD Elements', 'WEBURL'));
         $url = rtrim($url, '/');
-        //$url = "http://americanart.si.edu";
-        //$url = "http://www.armyavnmuseum.org";
-        //make some attempts at looking up additional data
-        //first, the url without trailing slash
-        $data = $this->queryDbpedia($url);
+        if( (! empty($url)) && Zend_Uri::check($url)) {
+            $data = $this->queryDbpedia($url);
+        }        
         
         //second, the url with trailing slash
         if(! $data) {
@@ -450,34 +468,20 @@ class MudPlugin extends Omeka_Plugin_AbstractPlugin
             sleep(1);
             $data = $this->queryDbpedia($url);
         }
+        //try via a stored wikipedia url
+        $wikipediaUrl = metadata($item, array('MUD Elements', 'Wikipedia Url'));
         
+        if (! $data) {
+            $data = $this->queryDbpediaByWikipediaUrl($wikipediaUrl);
+        }
         //insert new variations, like digging up a redirected / updataed url, here
         
         
         $this->dbpediaData = $data;
     }
     
-    protected function queryDbpedia($url)
+    protected function sparqlDbpedia($sparql) 
     {
-        $sparql = "
-            PREFIX owl: <http://www.w3.org/2002/07/owl#>
-            PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
-            PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
-            PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
-            PREFIX foaf: <http://xmlns.com/foaf/0.1/>
-            PREFIX dc: <http://purl.org/dc/elements/1.1/>
-            PREFIX : <http://dbpedia.org/resource/>
-            PREFIX dbpedia2: <http://dbpedia.org/property/>
-            PREFIX dbpedia: <http://dbpedia.org/>
-            PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
-
-            SELECT DISTINCT ?pic ?desc ?s ?wikipediaUrl WHERE {
-            ?s dbpedia2:website <$url> ;
-               foaf:depiction ?pic ;
-               foaf:isPrimaryTopicOf ?wikipediaUrl ;
-               <http://dbpedia.org/ontology/abstract> ?desc 
-            FILTER(langMatches(lang(?desc), 'EN'))
-            }";
         $client = new Zend_Http_Client();
         $client->setUri('http://dbpedia.org/sparql');
         $client->setParameterGet('query', $sparql);
@@ -496,7 +500,34 @@ class MudPlugin extends Omeka_Plugin_AbstractPlugin
                          'dbpediaUri' => $dbpediaUri, 
                          'wikipediaUrl' => $wikipediaUrl
                         );
-        }
+        }        
+    }
+    
+    protected function queryDbpediaByWikipediaUrl($wikipediaUrl)
+    {
+        $sparql =  self::PREFIXES . "
+            SELECT DISTINCT ?pic ?desc ?s ?wikipediaUrl WHERE {
+            ?s ?p ?wikipediaUrl ;
+               foaf:depiction ?pic ;
+               foaf:isPrimaryTopicOf <{$wikipediaUrl}> ;
+               <http://dbpedia.org/ontology/abstract> ?desc 
+            FILTER(langMatches(lang(?desc), 'EN'))
+            }";
+        return $this->sparqlDbpedia($sparql);
+    }
+    
+    protected function queryDbpedia($url)
+    {
+        $sparql = self::PREFIXES .  "
+            SELECT DISTINCT ?pic ?desc ?s ?wikipediaUrl WHERE {
+            ?s dbpedia2:website <$url> ;
+               foaf:depiction ?pic ;
+               foaf:isPrimaryTopicOf ?wikipediaUrl ;
+               <http://dbpedia.org/ontology/abstract> ?desc 
+            FILTER(langMatches(lang(?desc), 'EN'))
+            }";
+        return $this->sparqlDbpedia($sparql);
+
     }
 
     protected function getDcEl($elementName)
