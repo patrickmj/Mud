@@ -214,15 +214,18 @@ class MudPlugin extends Omeka_Plugin_AbstractPlugin
         
         
         if ($this->dbpediaData) {
-            if (! empty($this->dbpediaData['desc'])) {
+            $dcDescription = metadata($item, array('Dublin Core', 'Description'));
+            if (! empty($this->dbpediaData['desc']) && empty($dcDescription)) {
                 $dcDescEl = $this->getDcEl('Description');
                 $item->addTextForElement($dcDescEl, $this->dbpediaData['desc']);
             }
-            if (! empty($this->dbpediaData['dbpediaUri'])) {
+            $dbpediaUri = metadata($item, array('MUD Elements', 'DBpedia Uri'));
+            if (! empty($this->dbpediaData['dbpediaUri']) && empty($dbpediaUri)) {
                 $mudDbpediaEl = $this->getMudEl('DBpedia Uri');
                 $item->addTextForElement($mudDbpediaEl, $this->dbpediaData['dbpediaUri']);
             }
-            if (! empty($this->dbpediaData['wikipediaUrl'])) {
+            $wikipediaUrl = metadata($item, array('MUD Elements', 'Wikipedia Url'));
+            if (! empty($this->dbpediaData['wikipediaUrl']) && empty($wikipediaUrl)) {
                 $mudWikipediaEl = $this->getMudEl('Wikipedia Url');
                 $item->addTextForElement($mudWikipediaEl, $this->dbpediaData['wikipediaUrl']);
             }
@@ -263,11 +266,14 @@ class MudPlugin extends Omeka_Plugin_AbstractPlugin
         $dcTitleEl = $this->getDcEl('Title');
         $name = metadata($item, array('MUD Elements', 'NAME'));
         $altName = metadata($item, array('MUD Elements', 'ALTNAME'));
-        if (!empty($name)) {
-            $item->addTextForElement($dcTitleEl, $name);
-        }
-        if (!empty($altName)) {
-            $item->addTextForElement($dcTitleEl, $altName);
+        $dcTitle = metadata($item, array('Dublin Core', 'Title'));
+        if (empty($dcTitle)) {
+            if (!empty($name)) {
+                $item->addTextForElement($dcTitleEl, $name);
+            }
+            if (!empty($altName)) {
+                $item->addTextForElement($dcTitleEl, $altName);
+            }
         }
     }
 
@@ -276,20 +282,24 @@ class MudPlugin extends Omeka_Plugin_AbstractPlugin
         $dcIdEl = $this->getDcEl('Identifier');
         $mid = metadata($item, array('MUD Elements', 'MID'));
         $ein = metadata($item, array('MUD Elements', 'EIN'));
-        if (!empty($ein)) {
-            $item->addTextForElement($dcIdEl, 'ein_' . $ein);    
+        $dcId = metadata($item, array('Dublin Core', 'Identifier'));
+        if (empty($dcId)) {
+            if (!empty($ein)) {
+                $item->addTextForElement($dcIdEl, 'ein_' . $ein);    
+            }
+            $item->addTextForElement($dcIdEl, 'mid_' . $mid);            
         }
-        $item->addTextForElement($dcIdEl, 'mid_' . $mid);
-        
     }
 
     protected function addDcType($item)
     {
-        
         $disc = metadata($item, array('MUD Elements', 'DISCIPL'));
-        if (! empty($disc)) {
-            $dcTypeEl = $this->getDcEl('Type');
-            $item->addTextForElement($dcTypeEl, $disc);
+        $dcType = metadata($item, array('Dublin Core', 'Type'));
+        if (empty($dcType)) {
+            if (! empty($disc)) {
+                $dcTypeEl = $this->getDcEl('Type');
+                $item->addTextForElement($dcTypeEl, $disc);
+            }
         }
     }
 
@@ -470,7 +480,6 @@ class MudPlugin extends Omeka_Plugin_AbstractPlugin
         }
         //try via a stored wikipedia url
         $wikipediaUrl = metadata($item, array('MUD Elements', 'Wikipedia Url'));
-        
         if (! $data) {
             $data = $this->queryDbpediaByWikipediaUrl($wikipediaUrl);
         }
@@ -500,7 +509,7 @@ class MudPlugin extends Omeka_Plugin_AbstractPlugin
                          'dbpediaUri' => $dbpediaUri, 
                          'wikipediaUrl' => $wikipediaUrl
                         );
-        }        
+        }
     }
     
     protected function queryDbpediaByWikipediaUrl($wikipediaUrl)
@@ -508,11 +517,17 @@ class MudPlugin extends Omeka_Plugin_AbstractPlugin
         $sparql =  self::PREFIXES . "
             SELECT DISTINCT ?pic ?desc ?s ?wikipediaUrl WHERE {
             ?s ?p ?wikipediaUrl ;
-               foaf:depiction ?pic ;
                foaf:isPrimaryTopicOf <{$wikipediaUrl}> ;
-               <http://dbpedia.org/ontology/abstract> ?desc 
+               foaf:isPrimaryTopicOf ?wikipediaUrl;
+               <http://dbpedia.org/ontology/abstract> ?desc .
+               
+               OPTIONAL {
+                  ?s foaf:depiction ?pic .
+               }               
             FILTER(langMatches(lang(?desc), 'EN'))
             }";
+        
+        debug($sparql);
         return $this->sparqlDbpedia($sparql);
     }
     
