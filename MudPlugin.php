@@ -62,31 +62,31 @@ class MudPlugin extends Omeka_Plugin_AbstractPlugin
     {
         switch($value) {
             case 'ART':
-                return __("Art Museums");
+                return "Art Museums";
                 break;
             case 'BOT':
-                return __("Arboretums, Botanitcal Gardens, And Nature Centers");
+                return "Arboretums, Botanitcal Gardens, And Nature Centers";
                 break;
             case 'CMU':
-                return __("Children's Museums");
+                return "Children's Museums";
                 break;
             case 'GMU':
-                return __("Uncategorized or General Museums");
+                return "Uncategorized or General Museums";
                 break;
             case 'HSC':
-                return __("Historical Societies, Historic Preservation");
+                return "Historical Societies, Historic Preservation";
                 break;
             case 'HST':
-                return __("History Museums");
+                return "History Museums";
                 break;
             case 'NAT':
-                return __("Natural History and Natural Science Museums");
+                return "Natural History and Natural Science Museums";
                 break;
             case 'SCI':
-                return __("Science and Technology Museums and Planetariums");
+                return "Science and Technology Museums and Planetariums";
                 break;
             case 'ZAW':
-                return __("Zoos, Aquariums, and Wildlife Conservation");
+                return "Zoos, Aquariums, and Wildlife Conservation";
                 break;
         }
     }
@@ -497,6 +497,7 @@ class MudPlugin extends Omeka_Plugin_AbstractPlugin
         $client->setParameterGet('output', 'json');
         $response = $client->request();
         $body = json_decode($response->getBody(), true);
+        debug(print_r($body['results']['bindings'], true));
         if(empty($body['results']['bindings'])) {
             return false;
         } else {
