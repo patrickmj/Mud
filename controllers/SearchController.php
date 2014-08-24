@@ -5,6 +5,7 @@ class Mud_SearchController extends Omeka_Controller_AbstractActionController
     {
         $params = $this->getAllParams();
         $advanced = array();
+        $paramArray = array();
         if (!empty($params['type'])) {
             $advanced[] = array('element_id' => 51, 'type' => 'is exactly', 'terms' => $params['type']);
         }
@@ -41,6 +42,13 @@ class Mud_SearchController extends Omeka_Controller_AbstractActionController
             if (isset($params['geolocation-radius'])) {
                 $paramArray['geolocation-radius'] = $params['geolocation-radius'];
             }
+        }
+        
+        //no search params, so get some featured things at random
+        if (empty($paramArray['search']) && empty($paramArray['geolocation-address'])) {
+            $items = get_random_featured_items(1);
+            $itemId = $items[0]->id;
+            $this->_helper->redirector->gotoUrl("items/show/$itemId");
         }
         $searchParams = http_build_query($paramArray);
         $this->_helper->redirector->gotoUrl('items/browse?' . $searchParams );
