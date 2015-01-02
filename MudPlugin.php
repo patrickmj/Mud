@@ -20,6 +20,7 @@ class MudPlugin extends Omeka_Plugin_AbstractPlugin
             'filterLocale4'    => array('Display', 'Item', 'MUD Elements', 'LOCALE4'),
             'filterAamreg'     => array('Display', 'Item', 'MUD Elements', 'AAMREG'),
             'filterPhone'      => array('Display', 'Item', 'MUD Elements', 'PHONE'),
+            'api_resources'
     );
 
     const PREFIXES = "
@@ -56,6 +57,16 @@ class MudPlugin extends Omeka_Plugin_AbstractPlugin
     public function filterPhone($value, $args)
     {
         return "(".substr($value, 0, 3).") ".substr($value, 3, 3)."-".substr($value,6);
+    }
+    
+    public function filterApiResources($apiResources)
+    {
+        $apiResources['muditems'] = array(
+                'record_type' => 'MudIdsMap',
+                'actions'      => array('get', 'index'),
+                'index_params' => array('mid')
+                );
+        return $apiResources;
     }
 
     public function filterDiscipline($value, $args)
