@@ -11,7 +11,8 @@ class MudPlugin extends Omeka_Plugin_AbstractPlugin
     
     protected $_hooks = array(
             'install',
-            'after_save_item'
+            'after_save_item',
+            'after_delete_item'
             );
 
     protected $_filters = array(
@@ -186,6 +187,15 @@ class MudPlugin extends Omeka_Plugin_AbstractPlugin
             default:
                 return 'Unknown';
                 break;
+        }
+    }
+    
+    public function hookAfterDeleteItem($args)
+    {
+        $item = $args['record'];
+        $mudMaps = $this->_db->getTable('MudIdsMap')->findBy(array('item_id' => $item->id));
+        foreach ($mudMaps as $map) {
+            $map->delete();
         }
     }
     
